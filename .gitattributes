@@ -1,0 +1,9 @@
+# Set default line endings
+* text=auto
+
+# Set line endings to LF for all assembly files.
+*.asm text eol=lf
+
+# Mark image files as binary to prevent line ending conversion.
+*.png binary
+*.jpg binary
