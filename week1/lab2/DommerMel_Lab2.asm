@@ -2,13 +2,13 @@
 hello:		.asciiz	"Hello World"
 newline:	.asciiz "\n"
 
-		# Print Hello World\n
+		# Print Hello World
 		.text
-		li	$v0,	4
-		la	$a0,	hello
+		li	$v0,	4		# Print string
+		la	$a0,	hello		# Print the starting address of the string to print.
 		syscall
 		
-		# 1) Hello World (print a new line)
+		# 1) Hello World with a new line
 		li	$v0,	4		# Print string - This may not be needed but just in case. If code is added between.
 		la	$a0,	newline		# load address of newline
 		syscall				# Print newline
@@ -30,7 +30,7 @@ newline:	.asciiz "\n"
 		la	$a0,	newline		# load address newline
 		syscall				# Print newline
 		
-		# 3) Clear
+		# 3) Clear registers
 		move	$t0,	$zero		# Clear t0
 		move	$t1,	$zero		# Clear t1
 		move	$t2,	$zero		# Clear t2
@@ -38,15 +38,15 @@ newline:	.asciiz "\n"
 		# 4) Loops - example BEQ and BNE loops $t0 = 2 at the end.
 		li	$t0,	0		# Load 0
 		li	$t1,	2		# Load 2
-loop:		add	$t0,	$t0,	1	# add 1 
+loop:		addi	$t0,	$t0,	1	# add 1 
 		bgt	$t1,	$t0,	loop	# $t0 = 2 here
 		
 		# 5) Convert C++ code into Assembly.
 		move	$t0,	$zero		# accumulator = 0
 		move	$t1,	$zero		# j = 0
 jloop:		bge	$t1,	5,	jend	# goto jend if j >= 5
-		add	$t1,	$t1,	1 	# j++
-		add	$t0,	$t0,	1	# accumulator += 1
+		addi	$t1,	$t1,	1 	# j++
+		addi	$t0,	$t0,	1	# accumulator += 1
 		move	$t2,	$zero		# i = 0
 iloop:		bge	$t2,	3,	iend	# goto iend if i >= 3
 		add	$t2,	$t2,	1	# i++
