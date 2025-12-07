@@ -96,7 +96,8 @@ exit:		li 	$v0,	10			# exit the program
 ##################################################################		
 atoi:		move	$t0,	$a0 		# moves address (from $a0 to $t0) that was passed in from the main part of the program
 		li	$t1,	0			# result storage
-		li	$t5,	65535			# Added: 16-bit max value constant
+		li	$t3,	10			# set $t3 to 10 for multiplication base 10 adjustment
+		li	$t4,	65535			# Added: 16-bit max value constant
 
 loop:		lb	$t2,	0($t0) 			# loads the first byte of the word into $t2
 		beq	$t2,	0,	success		# if the current byte is a null space, go to exit
@@ -106,13 +107,10 @@ loop:		lb	$t2,	0($t0) 			# loads the first byte of the word into $t2
 		blt	$t2,	0,	bad_char	# if less than 0, return invalid characters
 		bgt	$t2,	9,	bad_char	# if greater than 9, return invalid characters
 
-convert:	move	$t3,	$zero			# initialize $t3 to 0
-		li	$t4,	10			# set $t4 to 10 for multiplication base 10 adjustment
-		mul	$t3,	$t1,	$t4		# Changed: use mul (simpler, result in $t3)
-		bgt	$t3,	$t5,	overflow	# Added: check if result * 10 > 65535
-		addu	$t3,	$t3,	$t2		# add the current digit to the result
-		bgt	$t3,	$t5,	overflow	# Added: check if result + digit > 65535
-		move	$t1,	$t3			# set the new result.
+convert:	mul	$t1,	$t1,	$t3		# Changed: use mul (simpler, result in $t3)
+		bgt	$t1,	$t4,	overflow	# Added: check if result * 10 > 65535
+		addu	$t1,	$t1,	$t2		# add the current digit to the result
+		bgt	$t1,	$t4,	overflow	# Added: check if result + digit > 65535
 		addi	$t0,	$t0,	1		# adds 1 to the address to (next character)
 		j 	loop 				# loop to process next character.
 		
