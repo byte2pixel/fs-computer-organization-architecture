@@ -24,7 +24,9 @@ error_unknown:	.asciiz		"\nYou encountered an unknown error, program will exit.\
 error_input:	.asciiz		"Nice try... You need to at least enter a number! Try again.\n"
 print_int:	.asciiz		"\nThe integer porition of your number is: "
 print_frac:	.asciiz		"\nThe fraction porition of your number is: "
-print_bin:	.asciiz		"\nThe sum of your numbers in fixed 8.8 is: "
+print_bin:	.asciiz		"\nThe binary representation of your number in fixed 8.8 is: "
+print_sum:      .asciiz		"\nThe sum of your two numbers in binary (fixed 8.8) is: "
+warning_ovflow:	.asciiz		"\nWARNING: Summation overflow detected! Result is not accurate due to exceeding 8.8 notation range (max 255.99~).\n"
 
         	.text
 		li	$v0,	4
@@ -61,7 +63,7 @@ process:	la	$a0,	buffer
 		# 1 = Non-numeric characters
 		# 2 = Overflow
 		beqz	$t0,	print_results	# If 0 (success), print results.
-		
+
 		# Handle error (non-zero status)
 		jal	handle_parse_error
 		j	main			# retry
@@ -70,7 +72,7 @@ process:	la	$a0,	buffer
 print_results:	li	$v0,	4		# print integer label
 		la	$a0,	print_int
 		syscall
-        
+
 		li	$v0,	1		# print integer part
 		move	$a0,	$s0
 		syscall
@@ -89,12 +91,12 @@ print_results:	li	$v0,	4		# print integer label
 		move	$a2,	$s2		# load digit count into $a2
 		jal	to_fixed88
 		move	$s3,	$v0		# save the result into $s3
-		
+
 		# Print the 8.8 notation in binary, (syscall 35)
 		li	$v0,	4
 		la	$a0,	print_bin
 		syscall
-		
+
 		li	$v0,	35
 		move	$a0,	$s3
 		syscall
@@ -120,7 +122,7 @@ main2:		li	$v0,	4
 		la	$a0,	error_input
 		syscall
 		j	main2			# Try again.
-		
+
 		# Process the string they entered.
 process2:	la	$a0,	buffer
 		jal	parse_real		# Parse the real number
@@ -134,11 +136,11 @@ process2:	la	$a0,	buffer
 		# 1 = Non-numeric characters
 		# 2 = Overflow
 		beqz	$t0,	print_results2	# If 0 (success), print results.
-		
+
 		# Handle error (non-zero status)
 		jal	handle_parse_error
 		j	main2			# retry
-		
+
 		# Successful conversion, print both parts
 		# set part 2 to 8.8 notation
 print_results2:	move    $a0,	$s0		# load integer into $a0
@@ -148,13 +150,23 @@ print_results2:	move    $a0,	$s0		# load integer into $a0
 		move	$t1,	$v0		# save the result into $t1
 		# Add the two 8.8 notation numbers
 		add	$s3,	$s3,	$t1	# add first and second number in 8.8 notation
+
 		# Print the final result in binary (syscall 35)
 		li	$v0,	4
-		la	$a0,	print_bin
+		la	$a0,	print_sum
 		syscall
-		
+
 		li	$v0,	35
 		move	$a0,	$s3
+		syscall
+
+		# Check for overflow (if sum >= 65536, it overflowed)
+		li	$t2,	65536		# max value + 1 for 16-bit (2^16)
+		blt	$s3,	$t2,	exit	# if less than max, no overflow
+		
+		# Print overflow warning
+		li	$v0,	4
+		la	$a0,	warning_ovflow
 		syscall
 
 exit:		li 	$v0,	10		# exit the program
@@ -192,24 +204,24 @@ parse_real:	addi	$sp,	$sp,	-16		# save registers to the stack
 		move	$t2,	$a1		# address after integer part
 
 		bnez	$t0,	pr_error	# if error, return
-		
+
 		bgt	$s0,	255,	pr_overflow	# integer must be 0-255
-		
+
 		# Check if we have a decimal point
 		lb	$t3,	0($t2)
 		beq	$t3,	0,	pr_no_frac	# null terminator, no fractional part
 		beq	$t3,	10,	pr_no_frac	# newline, no fractional part
 		bne	$t3,	46,	pr_invalid	# not a '.', invalid
-		
+
 		# Parse fractional part
 		addi	$a0,	$t2,	1	# skip the '.'
 		jal	atoi_frac		# parse fractional portion
 		move	$t3,	$v0		# status
 		move	$s1,	$v1		# save fractional value to $s1
 		move	$t4,	$a1		# save digit count
-		
+
 		bnez	$t3,	pr_error_t3	# if error, return
-		
+
 		# Success with fractional part
 		li	$v0,	0
 		move	$v1,	$s0		# integer part from $s0
@@ -346,33 +358,33 @@ af_success:	li	$v0,	0
 ##################################################################
 to_fixed88:	# Step 1: Shift integer left by 8 bits
 		sll	$t0,	$a0,	8	# integer << 8
-		
+
 		# Step 2: Convert fractional digits to 8-bit fixed point
 		# Formula: (frac_digits * 256) / (10^digit_count)
-		
+
 		beqz	$a2,	tf_no_frac	# if no fractional digits, skip
-		
+
 		# Multiply fractional part by 256
 		li	$t1,	256
 		mul	$t2,	$a1,	$t1	# frac * 256
-		
+
 		# Divide by 10^digit_count
 		li	$t3,	10		# divisor
 		li	$t4,	1		# accumulator for 10^digit_count
 		move	$t5,	$a2		# counter
-		
+
 power_loop:	beqz	$t5,	power_done
 		mul	$t4,	$t4,	$t3	# accumulator *= 10
 		subi	$t5,	$t5,	1
 		j	power_loop
-		
+
 power_done:	div	$t2,	$t4		# divide by 10^digit_count
 		mflo	$t2			# get quotient
-		
+
 		# Combine integer and fractional parts
 		or	$v0,	$t0,	$t2	# result = (int << 8) | frac
 		jr	$ra
-		
+
 tf_no_frac:	move	$v0,	$t0		# just the integer part shifted
 		jr	$ra
 
@@ -388,17 +400,17 @@ tf_no_frac:	move	$v0,	$t0		# just the integer part shifted
 ##################################################################
 handle_parse_error:
 		li	$v0,	4		# prepare to print string
-		
+
 		bne	$t0,	1,	hpe_overflow
 		la	$a0,	error_char	# invalid character error
 		syscall
 		jr	$ra
-		
+
 hpe_overflow:	bne	$t0,	2,	hpe_unknown
 		la	$a0,	error_ovflow	# overflow error
 		syscall
 		jr	$ra
-		
+
 hpe_unknown:	la	$a0,	error_unknown	# unknown error (fatal)
 		syscall
 		j	exit			# don't return, exit program	
