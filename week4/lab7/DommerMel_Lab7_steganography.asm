@@ -16,7 +16,7 @@
 #                                                                    #
 # Part 3                                                             #
 #    - Shift through the information on the hidden info.             #
-#    - Clue: “the answer lies before a sequence of 3 stars”          #
+#    - Clue: ï¿½the answer lies before a sequence of 3 starsï¿½          #
 #        Possibly meaning 3 '*' or 42 or 0x2A                        #
 #        Print out the city                                          #
 ######################################################################
@@ -28,8 +28,10 @@ print_offset:   .asciiz		"\nThe offset where the pixel data starts: "
 print_heapaddr:	.asciiz		"\nThe heap address given: "
 print_city:	.asciiz		"\nWe are meeting in: "
 print_fin:	.asciiz		"\nSee you soon!"
+error_open:	.asciiz		"\nUnabled to open the file, check the location of the file vs. cwd."
 file_header:	.space	54	# reserve 54 bytes for the bmp header.
 hidden_data:	.space	256	# reserve space for the city.
+no_stars_msg:   .asciiz 	"\nAbort! The mission has been compromised. We are not meeting.\n"
 
 
         	.text
@@ -42,8 +44,13 @@ hidden_data:	.space	256	# reserve space for the city.
 		li	$a2,	0		# ignored?
 		syscall
 
-		move	$s6,	$v0		# save the file descriptor
+		bgtz    $v0,	file_opened	# if neg, file open failed
+		li      $v0,	4		# error opening file
+		la      $a0,	error_open	# print file error message
+		syscall
+		j       exit			# GOTO exit
 
+file_opened:	move    $s6,	$v0		# save the file descriptor
 		li	$v0,	14		# read from file
 		move	$a0,	$s6		# load fild discriptor into $a0
 		la	$a1,	file_header	# address of input buffer where data will be read
@@ -111,19 +118,31 @@ hidden_data:	.space	256	# reserve space for the city.
 		syscall
 
 ################################################################
-# Part 3, extract hidden city before '***'.                   #
+# Part 3, extract hidden city before '***'.                    #
 ################################################################
 		add	$t0,	$s2,	$s1	# store start of pixel data (where to start searching)
 		li	$t3,	0		# star_count (this will handle knowing we found 3 in a row)
 		li	$t4,	0		# pointer to first '*' (this will be my marker for end of city)
 
 		# Search for 3 stars in a row.
-find_stars:	lb	$t5,	0($t0)		# Load byte
+find_stars:	
+		# Check if we've reached the end of the file (heap + file size)
+		add     $t8,    $s2,    $s0         # $t8 = end address (heap + file size)
+		bge     $t0,    $t8,    no_stars_found   # if scan pointer >= end, not found
+		lb	$t5,	0($t0)		# Load byte if not at the end.
 		bne	$t5,	0x2A,	reset_stars
 		addi	$t3,	$t3,	1	# Increment star_count
 		beq	$t3,	1,	set_first_star	# if count is 1, jump to save first '*' pos.
 		j	check_three		# check the count
 
+# No stars found error handler
+no_stars_found:
+		li      $v0,	4
+		la      $a0,	no_stars_msg
+		syscall
+		j       exit
+
+# Star found, check for 3 and extract city name.
 set_first_star:	move	$t4,	$t0		# save pointer to first '*' (end of city marker.)
 		j	check_three
 
@@ -149,7 +168,7 @@ not_alpha:	addi	$t7,	$t6,	1		# found non-alpha, $t7 = $t6 +1 first city letter t
 
 		# Loop from the starting city letter to the ending city letter printing each character.
 city_loop:	beq	$t7,	$t4,	done_print	# exit loop if our counter reaches the first star held in $t4.
-		lb	$t5,	0($t7)			# load the city letter to print it.
+		lbu	$t5,	0($t7)			# load the city letter to print it.
 		li	$v0,	11			# print char syscall
 		move	$a0,	$t5			# load char into $a0
 		syscall
@@ -162,10 +181,10 @@ next_back:	addi	$t6,	$t6,	-1		# move one back to check the next letter.
 		
 next_byte:	addi	$t0,	$t0,	1		# move one forward looking for star.
 		j	find_stars
+
 ################################################################
 # Cleanup and exit                                             #
 ################################################################
-
 done_print:	li	$v0,	16		# close file
 		move	$a0,	$s6		# file discriptor to close
 		syscall
@@ -174,7 +193,7 @@ done_print:	li	$v0,	16		# close file
 		la	$a0,	print_fin
 		syscall
 
-		li	$v0,	10		# exit
+exit:		li	$v0,	10		# exit
 		syscall
 
 ##########################################################
@@ -183,10 +202,10 @@ done_print:	li	$v0,	16		# close file
 #   Returns: $v0 = 4-byte LE word                        #
 ##########################################################
 get_size:	move	$t0,	$a0		# $t0 = address of first byte
-		lb	$t1,	0($t0)		# Load byte 0 LSB?
-		lb	$t2,	1($t0)		# Load byte 1
-		lb	$t3,	2($t0)		# Load byte 2
-		lb	$t4,	3($t0)		# Load byte 3 MSB?
+		lbu	$t1,	0($t0)		# Load byte 0 LSB?
+		lbu	$t2,	1($t0)		# Load byte 1
+		lbu	$t3,	2($t0)		# Load byte 2
+		lbu	$t4,	3($t0)		# Load byte 3 MSB?
 		sll	$t4,	$t4,	24	# Shift to bits 24-31
 		sll	$t3,	$t3,	16	# Shift to bits 16-23
         	sll	$t2,	$t2,	8	# Shift to bits 8-15
